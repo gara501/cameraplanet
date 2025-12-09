@@ -1,0 +1,153 @@
+
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Particles + Glow + Motion Blur</title>
+
+  <!-- MediaPipe classic -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+  <!-- Three.js v0.165.0 moderno (importmap) -->
+  <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    html,body { margin:0; height:100%; background:#000; overflow:hidden; }
+    #three { position:fixed; inset:0; }
+    #ui {
+      position:fixed; left:12px; top:12px; z-index:10; color:white;
+      background:rgba(0,0,0,0.35); padding:6px 12px; border-radius:8px;
+      font-family:Inter,system-ui; font-size:14px;
+    }
+    #score-container {
+      position:fixed; right:12px; top:12px; z-index:10; color:white;
+      background:rgba(0,0,0,0.5); padding:12px 20px; border-radius:12px;
+      font-family:Inter,system-ui; font-size:16px; font-weight:600;
+      border: 2px solid rgba(255,255,255,0.2);
+      text-align: center;
+    }
+    #score {
+      font-size: 32px;
+      color: #00ff88;
+      text-shadow: 0 0 10px #00ff88;
+      display: block;
+      margin-top: 4px;
+    }
+    #life-container {
+      position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+      width: 400px; height: 24px;
+      background: rgba(0,0,0,0.6);
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 12px;
+      overflow: hidden;
+      z-index: 20;
+    }
+    #life-bar {
+      width: 100%; height: 100%;
+      background: linear-gradient(90deg, #ff4444, #00ff88);
+      transform-origin: left;
+      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    #game-over {
+      position: fixed; inset: 0;
+      display: none;
+      flex-direction: column;
+      align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.85);
+      color: #ff4444;
+      font-family: 'Inter', system-ui;
+      font-size: 80px; font-weight: 900;
+      z-index: 100;
+      text-shadow: 0 0 30px rgba(255,0,0,0.5);
+      backdrop-filter: blur(5px);
+      gap: 30px;
+    }
+    #restart-btn {
+      padding: 15px 40px;
+      font-size: 24px;
+      font-weight: 700;
+      color: white;
+      background: #ff4444;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 0 20px rgba(255,68,68,0.4);
+      transition: all 0.2s ease;
+      font-family: 'Inter', system-ui;
+    }
+    #restart-btn:hover {
+      transform: scale(1.05);
+      background: #ff6666;
+      box-shadow: 0 0 30px rgba(255,68,68,0.6);
+    }
+    #countdown {
+      position: fixed; inset: 0;
+      display: none;
+      align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.4);
+      color: #fff;
+      font-family: 'Inter', system-ui;
+      font-size: 150px; font-weight: 900;
+      z-index: 200;
+      text-shadow: 0 0 50px rgba(255,255,255,0.8);
+      pointer-events: none;
+    }
+    #superpower-container {
+      position: fixed;
+      top: 20px;
+      right: 20px; /* Right side as requested */
+      display: flex;
+      gap: 10px;
+      z-index: 101;
+    }
+    .charge {
+      font-size: 30px;
+      opacity: 0.3;
+      filter: grayscale(1);
+      transition: all 0.3s;
+    }
+    .charge.active {
+      opacity: 1;
+      filter: grayscale(0) drop-shadow(0 0 10px #00ffff);
+      transform: scale(1.1);
+    }
+  </style>
+</head>
+<body>
+  <div id="three"></div>
+  <div id="ui">Protect the Earth from asteroids 💥✨</div>
+  
+  <div id="life-container">
+    <div id="life-bar"></div>
+  </div>
+  
+  <!-- Super Power Icons -->
+  <div id="superpower-container">
+    <div class="charge active">⚡</div>
+    <div class="charge active">⚡</div>
+    <div class="charge active">⚡</div>
+  </div>
+
+  <div id="score-container">
+    SCORE
+    <span id="score">0</span>
+  </div>
+
+  <div id="countdown"></div>
+  <div id="game-over">
+    <div>GAME OVER</div>
+    <button id="restart-btn">REINICIAR</button>
+  </div>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
