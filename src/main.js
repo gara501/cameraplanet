@@ -5,6 +5,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { AfterimagePass } from 'three/addons/postprocessing/AfterimagePass.js';
 import earthTextureUrl from './textures/earth.jpg?url';
 import asteroidTextureUrl from './textures/asteroid.jpg?url';
+import blueTextureUrl from './textures/blue.jpg?url';
 
     const threeContainer = document.getElementById('three');
 
@@ -40,7 +41,13 @@ import asteroidTextureUrl from './textures/asteroid.jpg?url';
     // Super Power
     let superPowerCharges = 3;
     let lastSuperPowerTime = 0;
-    const SUPER_POWER_COOLDOWN = 1000; // 1 second cooldown
+    const SUPER_POWER_COOLDOWN = 2000; // 1 second cooldown
+    
+    // Power Spheres
+    let powerSpheres = [];
+    let powerSphereMaterial = null;
+    let nextPowerSpawnTime = 0;
+    const POWER_SPHERE_RADIUS = 25;
 
     // ------------------------------------------------
     //  MEDIA PIPE HANDS
@@ -141,7 +148,9 @@ import asteroidTextureUrl from './textures/asteroid.jpg?url';
             } else {
                 clearInterval(timer);
                 el.style.display = 'none';
+                isGameActive = true;
                 if (onComplete) onComplete();
+                nextPowerSpawnTime = performance.now() + 10000;
             }
         }, 1000);
     }
@@ -216,6 +225,7 @@ import asteroidTextureUrl from './textures/asteroid.jpg?url';
         // Start countdown
         startCountdown(() => {
             isGameActive = true;
+            nextPowerSpawnTime = performance.now() + 10000;
         });
     }
 
@@ -360,6 +370,7 @@ import asteroidTextureUrl from './textures/asteroid.jpg?url';
 
       // Asteroids Setup
       createSpheres();
+      initPowerSphereMaterial();
 
       // Post Processing
       const renderPass = new RenderPass(scene, camera);
@@ -602,6 +613,162 @@ import asteroidTextureUrl from './textures/asteroid.jpg?url';
       });
     }
 
+
+
+    function initPowerSphereMaterial() {
+        const loader = new THREE.TextureLoader();
+        const texture = loader.load(blueTextureUrl);
+        
+        powerSphereMaterial = new THREE.MeshStandardMaterial({
+            map: texture,
+            color: 0xffffff,
+            emissive: 0x0088ff,
+            emissiveIntensity: 2.0,
+            roughness: 0.2,
+            metalness: 0.8
+        });
+    }
+
+    function spawnPowerSphere() {
+        if (!powerSphereMaterial) return;
+        
+        const geometry = new THREE.SphereGeometry(POWER_SPHERE_RADIUS, 32, 32);
+        const mat = powerSphereMaterial.clone(); 
+        const mesh = new THREE.Mesh(geometry, mat);
+        
+        const w = innerWidth;
+        const h = innerHeight;
+        
+        // Spawn at random edge
+        let x, y, vx, vy;
+        const edge = Math.floor(Math.random() * 4); // 0:top, 1:right, 2:bottom, 3:left
+        const offset = 50;
+        
+        if (edge === 0) { // Top
+            x = Math.random() * w;
+            y = -offset;
+        } else if (edge === 1) { // Right
+            x = w + offset;
+            y = Math.random() * h;
+        } else if (edge === 2) { // Bottom
+            x = Math.random() * w;
+            y = h + offset;
+        } else { // Left
+            x = -offset;
+            y = Math.random() * h;
+        }
+        
+        // Target random point on opposite side quadrant
+        const targetX = w * 0.2 + Math.random() * w * 0.6;
+        const targetY = h * 0.2 + Math.random() * h * 0.6;
+        
+        const dx = targetX - x;
+        const dy = targetY - y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        const speed = 2 + Math.random() * 1.5; 
+        
+        mesh.userData.vx = (dx / dist) * speed;
+        mesh.userData.vy = (dy / dist) * speed;
+        
+        mesh.position.set(x, y, -50 + Math.random()*100); 
+        scene.add(mesh);
+        powerSpheres.push(mesh);
+    }
+
+    function updatePowerSpheres(dt, t) {
+        const timeSec = t / 1000;
+        
+        const w = innerWidth;
+        const h = innerHeight;
+        const earthRadius = Math.min(w, h) * 0.225;
+        const cx = w / 2;
+        const cy = h / 2;
+
+        for (let i = powerSpheres.length - 1; i >= 0; i--) {
+            const s = powerSpheres[i];
+            
+            // Move
+            s.position.x += s.userData.vx * dt * 60;
+            s.position.y += s.userData.vy * dt * 60;
+            s.rotation.z += dt;
+            s.rotation.x += dt * 0.5; // Add some tumble
+            
+            // Pulse Glow
+            if (s.material.emissiveIntensity !== undefined) {
+                 s.material.emissiveIntensity = 2.0 + Math.sin(t * 0.005) * 0.5;
+            }
+            
+            // --- Collisions ---
+            
+             // Shield Collision
+            let hitShield = false;
+            if (shieldMesh) {
+                 const dx = s.position.x - cx;
+                 const dy = s.position.y - cy; 
+                 const dist = Math.sqrt(dx*dx + dy*dy);
+                 const shieldHitRadius = earthRadius * 1.25; 
+                 
+                 // Check if crossing shield line
+                 if (dist < shieldHitRadius + POWER_SPHERE_RADIUS && dist > earthRadius) {
+                     let objAngle = Math.atan2(dy, dx); 
+                     let shieldAngle = shieldMesh.rotation.z;
+                     
+                     const normalize = (a) => {
+                         a = a % (Math.PI * 2);
+                         if (a < -Math.PI) a += Math.PI * 2;
+                         if (a > Math.PI) a -= Math.PI * 2;
+                         return a;
+                     };
+                     
+                     let diff = normalize(objAngle - shieldAngle);
+                     const halfLen = (Math.PI * 2 * SHIELD_COVERAGE) / 2;
+                     
+                     if (Math.abs(diff) < halfLen + 0.3) { 
+                         hitShield = true;
+                     }
+                 }
+            }
+
+            if (hitShield) {
+                // ADD CHARGE
+                if (superPowerCharges < 3) {
+                    superPowerCharges++;
+                    // Update UI
+                    const charges = document.querySelectorAll('.charge:not(.active)');
+                    if (charges.length > 0) {
+                        charges[0].classList.add('active');
+                    }
+                }
+                
+                // Remove
+                scene.remove(s);
+                powerSpheres.splice(i, 1);
+                continue;
+            }
+
+            // 2. Earth Collision (Destroy without charging)
+            if (earthMesh) {
+                const dx = s.position.x - cx;
+                const dy = s.position.y - cy;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                // Simple radius check
+                if (dist < earthRadius + POWER_SPHERE_RADIUS - 5) {
+                    scene.remove(s);
+                    powerSpheres.splice(i, 1);
+                    continue;
+                }
+            }
+
+            // 2. Offscreen check
+            const distX = s.position.x - cx;
+            const distY = s.position.y - cy;
+            if (Math.abs(distX) > w/2 + 200 || Math.abs(distY) > h/2 + 200) {
+                 scene.remove(s);
+                 powerSpheres.splice(i, 1);
+            }
+        }
+    }
+
     function integrate(dt) {
       const w = innerWidth;
       const h = innerHeight;
@@ -639,6 +806,12 @@ import asteroidTextureUrl from './textures/asteroid.jpg?url';
           return;
       }
 
+      const now = t;
+      if (isGameActive && now > nextPowerSpawnTime) {
+          spawnPowerSphere();
+          nextPowerSpawnTime = now + 10000; 
+      }
+
       const dt = (t - last) / 1000;
       last = t;
       
@@ -655,6 +828,7 @@ import asteroidTextureUrl from './textures/asteroid.jpg?url';
 
       if (isGameActive) {
           updateSpheres(dt);
+          updatePowerSpheres(dt, t);
           integrate(dt);
       }
 
